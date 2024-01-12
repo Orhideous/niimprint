@@ -4,15 +4,22 @@ import re
 import click
 from PIL import Image
 
-from niimprint import BluetoothTransport, PrinterClient, SerialTransport
+from niimprint import (
+    SUPPORTED_DEVICES,
+    BluetoothTransport,
+    PrinterClient,
+    NiimPrintError,
+    SerialTransport,
+    validate_image,
+)
 
 
 @click.command("print")
 @click.option(
     "-m",
     "--model",
-    type=click.Choice(["b1", "b18", "b21", "d11", "d110"], False),
-    default="b21",
+    type=click.Choice(SUPPORTED_DEVICES.keys(), False),
+    default="B21",
     show_default=True,
     help="Niimbot printer model",
 )
@@ -73,20 +80,17 @@ def print_cmd(model, conn, addr, density, rotate, image, verbose):
         port = addr if addr is not None else "auto"
         transport = SerialTransport(port=port)
 
-    if model in ("b1", "b18", "b21"):
-        max_width_px = 384
-    if model in ("d11", "d110"):
-        max_width_px = 96
-
-    if model in ("b18", "d11", "d110") and density > 3:
-        logging.warning(f"{model.upper()} only supports density up to 3")
-        density = 3
-
     image = Image.open(image)
     if rotate != "0":
         # PIL library rotates counter clockwise, so we need to multiply by -1
         image = image.rotate(-int(rotate), expand=True)
-    assert image.width <= max_width_px, f"Image width too big for {model.upper()}"
+
+    device = SUPPORTED_DEVICES.get(model.upper())
+    try:
+        validate_image(device, image_width=image.width, print_density=density)
+    except NiimPrintError:
+        logging.exception("Unsupported image")
+        exit(1)
 
     printer = PrinterClient(transport)
     printer.print_image(image, density=density)
