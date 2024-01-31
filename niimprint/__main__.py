@@ -10,6 +10,7 @@ from niimprint import (
     PrinterClient,
     NiimPrintError,
     SerialTransport,
+    SupportedDevice,
     validate_image,
 )
 
@@ -18,8 +19,8 @@ from niimprint import (
 @click.option(
     "-m",
     "--model",
-    type=click.Choice(SUPPORTED_DEVICES.keys(), False),
-    default="B21",
+    type=click.Choice(SupportedDevice, case_sensitive=False),
+    default=SupportedDevice.D11.name,
     show_default=True,
     help="Niimbot printer model",
 )
@@ -65,7 +66,7 @@ from niimprint import (
     is_flag=True,
     help="Enable verbose logging",
 )
-def print_cmd(model, conn, addr, density, rotate, image, verbose):
+def print_cmd(model: SupportedDevice, conn: str, addr: str, density: int, rotate, image: str, verbose: bool):
     logging.basicConfig(
         level="DEBUG" if verbose else "INFO",
         format="%(levelname)s | %(module)s:%(funcName)s:%(lineno)d - %(message)s",
@@ -85,7 +86,7 @@ def print_cmd(model, conn, addr, density, rotate, image, verbose):
         # PIL library rotates counter clockwise, so we need to multiply by -1
         image = image.rotate(-int(rotate), expand=True)
 
-    device = SUPPORTED_DEVICES.get(model.upper())
+    device = SUPPORTED_DEVICES[model.name]
     try:
         validate_image(device, image_width=image.width, print_density=density)
     except NiimPrintError:

@@ -1,2 +1,2 @@
-from .models import SUPPORTED_DEVICES, NiimPrintError, validate_image
+from .models import SUPPORTED_DEVICES, SupportedDevice, NiimPrintError, validate_image
 from .printer import BluetoothTransport, PrinterClient, SerialTransport
