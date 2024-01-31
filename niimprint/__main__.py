@@ -1,18 +1,33 @@
 import logging
 import re
+from typing import Optional
 
 import click
+from click_option_group import (
+    GroupedOption,
+    RequiredMutuallyExclusiveOptionGroup,
+    optgroup,
+)
 from PIL import Image
 
 from niimprint import (
     SUPPORTED_DEVICES,
     BluetoothTransport,
-    PrinterClient,
     NiimPrintError,
+    PrinterClient,
     SerialTransport,
     SupportedDevice,
     validate_image,
 )
+
+
+def validate_mac(ctx: click.Context, _: GroupedOption, value: str) -> str:
+    if ctx.params.get("serial", None) is not None:
+        return value
+    addr = value.upper()
+    if re.fullmatch(r"([0-9A-F]{2}:){5}([0-9A-F]{2})", addr):
+        return addr
+    raise click.BadParameter("format must be 'aa:bb:cc:dd:ee:ff'")
 
 
 @click.command("print")
@@ -24,18 +39,21 @@ from niimprint import (
     show_default=True,
     help="Niimbot printer model",
 )
-@click.option(
-    "-c",
-    "--conn",
-    type=click.Choice(["usb", "bluetooth"]),
-    default="usb",
-    show_default=True,
-    help="Connection type",
+@optgroup.group("Connection type", cls=RequiredMutuallyExclusiveOptionGroup)
+@optgroup.option(
+    "-b",
+    "--bluetooth",
+    type=click.UNPROCESSED,
+    callback=validate_mac,
+    help="Bluetooth MAC address"
 )
-@click.option(
-    "-a",
-    "--addr",
-    help="Bluetooth MAC address OR serial device path",
+@optgroup.option(
+    "-s",
+    "--serial",
+    type=click.Path(exists=True, writable=True, dir_okay=False),
+    is_flag=False,
+    flag_value="/dev/ttyACM0",
+    help="Serial port [default: /dev/ttyACM0]"
 )
 @click.option(
     "-d",
@@ -66,20 +84,29 @@ from niimprint import (
     is_flag=True,
     help="Enable verbose logging",
 )
-def print_cmd(model: SupportedDevice, conn: str, addr: str, density: int, rotate, image: str, verbose: bool):
+def print_cmd(
+        model: SupportedDevice,
+        density: int,
+        rotate: int,
+        image: str,
+        verbose: bool,
+        bluetooth: Optional[str],
+        serial: Optional[str]
+):
     logging.basicConfig(
         level="DEBUG" if verbose else "INFO",
         format="%(levelname)s | %(module)s:%(funcName)s:%(lineno)d - %(message)s",
     )
 
-    if conn == "bluetooth":
-        assert conn is not None, "--addr argument required for bluetooth connection"
-        addr = addr.upper()
-        assert re.fullmatch(r"([0-9A-F]{2}:){5}([0-9A-F]{2})", addr), "Bad MAC address"
-        transport = BluetoothTransport(addr)
-    if conn == "usb":
-        port = addr if addr is not None else "auto"
-        transport = SerialTransport(port=port)
+    match (bluetooth, serial):
+        case mac, None:
+            transport = BluetoothTransport(mac)
+        case None, tty:
+            transport = SerialTransport(port=tty)
+        case _:
+            # Unreachable (guaranteed by click), but still
+            logging.exception("Ambiguous transport")
+            exit(1)
 
     image = Image.open(image)
     if rotate != "0":
