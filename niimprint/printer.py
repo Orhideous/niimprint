@@ -1,14 +1,10 @@
-import abc
 import enum
 import logging
 import math
-import socket
 import struct
 import time
 
-import serial
 from PIL import Image, ImageOps
-from serial.tools.list_ports import comports as list_comports
 
 from niimprint.packet import NiimbotPacket
 
@@ -44,55 +40,6 @@ class RequestCodeEnum(enum.IntEnum):
 
 def _packet_to_int(x):
     return int.from_bytes(x.data, "big")
-
-
-class BaseTransport(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    def read(self, length: int) -> bytes:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def write(self, data: bytes):
-        raise NotImplementedError
-
-
-class BluetoothTransport(BaseTransport):
-    def __init__(self, address: str):
-        self._sock = socket.socket(
-            socket.AF_BLUETOOTH,
-            socket.SOCK_STREAM,
-            socket.BTPROTO_RFCOMM,
-        )
-        self._sock.connect((address, 1))
-
-    def read(self, length: int) -> bytes:
-        return self._sock.recv(length)
-
-    def write(self, data: bytes):
-        return self._sock.send(data)
-
-
-class SerialTransport(BaseTransport):
-    def __init__(self, port: str = "auto"):
-        port = port if port != "auto" else self._detect_port()
-        self._serial = serial.Serial(port=port, baudrate=115200, timeout=0.5)
-
-    def _detect_port(self):
-        all_ports = list(list_comports())
-        if len(all_ports) == 0:
-            raise RuntimeError("No serial ports detected")
-        if len(all_ports) > 1:
-            msg = "Too many serial ports, please select specific one:"
-            for port, desc, hwid in all_ports:
-                msg += f"\n- {port} : {desc} [{hwid}]"
-            raise RuntimeError(msg)
-        return all_ports[0][0]
-
-    def read(self, length: int) -> bytes:
-        return self._serial.read(length)
-
-    def write(self, data: bytes):
-        return self._serial.write(data)
 
 
 class PrinterClient:
