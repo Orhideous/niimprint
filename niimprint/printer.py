@@ -1,12 +1,9 @@
 import enum
 import logging
-import math
 import struct
 import time
 
-from PIL import Image, ImageOps
-
-from niimprint.packet import NiimbotPacket
+from niimprint.packet import NiimbotImage, NiimbotPacket
 
 
 class InfoEnum(enum.IntEnum):
@@ -47,31 +44,20 @@ class PrinterClient:
         self._transport = transport
         self._packetbuf = bytearray()
 
-    def print_image(self, image: Image, density: int = 3):
-        self.set_label_density(density)
+    def print(self, image: NiimbotImage):
+        self.set_label_density(image.density)
         self.set_label_type(1)
         self.start_print()
         # self.allow_print_clear()  # Something unsupported in protocol decoding (B21)
         self.start_page_print()
         self.set_dimension(image.height, image.width)
         # self.set_quantity(1)  # Same thing (B21)
-        for pkt in self._encode_image(image):
+        for pkt in image.payload:
             self._send(pkt)
         self.end_page_print()
         time.sleep(0.3)  # FIXME: Check get_print_status()
         while not self.end_print():
             time.sleep(0.1)
-
-    def _encode_image(self, image: Image):
-        img = ImageOps.invert(image.convert("L")).convert("1")
-        for y in range(img.height):
-            line_data = [img.getpixel((x, y)) for x in range(img.width)]
-            line_data = "".join("0" if pix == 0 else "1" for pix in line_data)
-            line_data = int(line_data, 2).to_bytes(math.ceil(img.width / 8), "big")
-            counts = (0, 0, 0)  # It seems like you can always send zeros
-            header = struct.pack(">H3BB", y, *counts, 1)
-            pkt = NiimbotPacket(0x85, header + line_data)
-            yield pkt
 
     def _recv(self):
         packets = []

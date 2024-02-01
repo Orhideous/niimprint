@@ -8,7 +8,6 @@ from click_option_group import (
     RequiredMutuallyExclusiveOptionGroup,
     optgroup,
 )
-from PIL import Image
 
 from niimprint import (
     SUPPORTED_DEVICES,
@@ -17,6 +16,7 @@ from niimprint import (
     PrinterClient,
     SerialTransport,
     SupportedDevice,
+    prepare_image,
     validate_image,
 )
 
@@ -87,7 +87,7 @@ def validate_mac(ctx: click.Context, _: GroupedOption, value: str) -> str:
 def print_cmd(
         model: SupportedDevice,
         density: int,
-        rotate: int,
+        rotate: str,
         image: str,
         verbose: bool,
         bluetooth: Optional[str],
@@ -108,20 +108,16 @@ def print_cmd(
             logging.exception("Ambiguous transport")
             exit(1)
 
-    image = Image.open(image)
-    if rotate != "0":
-        # PIL library rotates counter clockwise, so we need to multiply by -1
-        image = image.rotate(-int(rotate), expand=True)
-
     device = SUPPORTED_DEVICES[model.name]
+    prepared_image = prepare_image(image, density, rotate)
     try:
-        validate_image(device, image_width=image.width, print_density=density)
+        validate_image(device, prepared_image)
     except NiimPrintError:
         logging.exception("Unsupported image")
         exit(1)
 
     printer = PrinterClient(transport)
-    printer.print_image(image, density=density)
+    printer.print(prepared_image)
 
 
 if __name__ == "__main__":

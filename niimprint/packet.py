@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List
 
 
 @dataclass
@@ -28,3 +29,12 @@ class NiimbotPacket:
         return bytes(
             (0x55, 0x55, self.kind, len(self.data), *self.data, checksum, 0xAA, 0xAA)
         )
+
+
+@dataclass
+class NiimbotImage:
+    """Ready to print payload, containing all necessary information"""
+    width: int
+    height: int
+    payload: List[NiimbotPacket]
+    density: int

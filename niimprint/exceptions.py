@@ -1,0 +1,2 @@
+class NiimPrintError(BaseException):
+    pass
